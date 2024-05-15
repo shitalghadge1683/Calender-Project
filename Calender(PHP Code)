@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Event Calendar</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style>
+        .calendar {
+            width: 100%;
+            border: 1px solid #000;
+        }
+        .calendar th, .calendar td {
+            width: 14%;
+            border: 1px solid #000;
+            text-align: center;
+            padding: 10px;
+        }
+        .today {
+            background-color: #f0ad4e;
+        }
+        .event {
+            background-color: #5bc0de;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1 class="text-center my-4">Event Calendar</h1>
+
+    
+    <div class="d-flex justify-content-between mb-3">
+        <button id="prevMonth" class="btn btn-primary">Previous Month</button>
+        <h2 id="currentMonth"></h2>
+        <button id="nextMonth" class="btn btn-primary">Next Month</button>
+    </div>
+
+    <table class="calendar table table-bordered">
+        <thead>
+            <tr>
+                <th>Sun</th>
+                <th>Mon</th>
+                <th>Tue</th>
+                <th>Wed</th>
+                <th>Thu</th>
+                <th>Fri</th>
+                <th>Sat</th>
+            </tr>
+        </thead>
+        <tbody id="calendarBody"></tbody>
+    </table>
+
+    <div class="modal fade" id="eventModal" tabindex="-1" role="dialog" aria-labelledby="eventModalLabel" aria-hidden="true">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="eventModalLabel">Event Details</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <form id="eventForm">
+                        <input type="hidden" id="eventId" name="eventId">
+                        <div class="form-group">
+                            <label for="eventTitle">Title</label>
+                            <input type="text" class="form-control" id="eventTitle" name="title" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="eventDescription">Description</label>
+                            <textarea class="form-control" id="eventDescription" name="description" rows="3"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="eventDate">Date</label>
+                            <input type="date" class="form-control" id="eventDate" name="event_date" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="eventTime">Time</label>
+                            <input type="time" class="form-control" id="eventTime" name="event_time" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Save</button>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" id="deleteEvent" class="btn btn-danger">Delete</button>
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.1/umd/popper.min.js"></script>
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+<script>
+    let currentMonth = new Date().getMonth();
+    let currentYear = new Date().getFullYear();
+
+    $(document).ready(function() {
+        renderCalendar(currentMonth, currentYear);
+        
+        $("#prevMonth").click(function() {
+            if (currentMonth === 0) {
+                currentMonth = 11;
+                currentYear--;
+            } else {
+                currentMonth--;
+            }
+            renderCalendar(currentMonth, currentYear);
+        });
+
+        $("#nextMonth").click(function() {
+            if (currentMonth === 11) {
+                currentMonth = 0;
+                currentYear++;
+            } else {
+                currentMonth++;
+            }
+            renderCalendar(currentMonth, currentYear);
+        });
+
+        $("#calendarBody").on("click", "td", function() {
+            const date = $(this).data("date");
+            if (date) {
+                $("#eventDate").val(date);
+                $("#eventId").val("");
+                $("#eventTitle").val("");
+                $("#eventDescription").val("");
+                $("#eventTime").val("");
+                $("#deleteEvent").hide();
+                $("#eventModal").modal("show");
+
+                $.post("calendar.php", {action: "fetch", date: date}, function(data) {
+                    if (data) {
+                        const event = JSON.parse(data);
+                        $("#eventId").val(event.id);
+                        $("#eventTitle").val(event.title);
+                        $("#eventDescription").val(event.description);
+                        $("#eventTime").val(event.event_time);
+                        $("#deleteEvent").show();
+                    }
+                });
+            }
+        });
+
+        $("#eventForm").submit(function(event) {
+            event.preventDefault();
+            const formData = $(this).serialize() + "&action=save";
+            $.post("calendar.php", formData, function() {
+                $("#eventModal").modal("hide");
+                renderCalendar(currentMonth, currentYear);
+            });
+        });
+
+        $("#deleteEvent").click(function() {
+            const eventId = $("#eventId").val();
+            $.post("calendar.php", {action: "delete", id: eventId}, function() {
+                $("#eventModal").modal("hide");
+                renderCalendar(currentMonth, currentYear);
+            });
+        });
+    });
+
+    function renderCalendar(month, year) {
+        const firstDay = new Date(year, month).getDay();
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        $("#currentMonth").text(new Date(year, month).toLocaleString('default', {month: 'long', year: 'numeric'}));
+
+        let calendarBody = "";
+        let date = 1;
+        for (let i = 0; i < 6; i++) {
+            let row = "<tr>";
+            for (let j = 0; j < 7; j++) {
+                if (i === 0 && j < firstDay) {
+                    row += "<td></td>";
+                } else if (date > daysInMonth) {
+                    break;
+                } else {
+                    const day = new Date(year, month, date).toISOString().split("T")[0];
+                    row += `<td data-date="${day}" class="${day === new Date().toISOString().split("T")[0] ? "today" : ""}">${date}</td>`;
+                    date++;
+                }
+            }
+            row += "</tr>";
+            calendarBody += row;
+        }
+        $("#calendarBody").html(calendarBody);
+
+        $.post("calendar.php", {action: "fetchAll", month: month + 1, year: year}, function(data) {
+            if (data) {
+                const events = JSON.parse(data);
+                events.forEach(event => {
+                    $(`td[data-date='${event.event_date}']`).addClass("event");
+                });
+            }
+        });
+    }
+</script>
+
+<?php
+$host = 'localhost';
+$db = 'calendar';
+$user = 'root';
+$pass = '';
+
+$dsn = "mysql:host=$host;dbname=$db";
+$options = [
+    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+    PDO::ATTR_EMULATE_PREPARES => false,
+];
+
+try {
+    $pdo = new PDO($dsn, $user, $pass, $options);
+} catch (PDOException $e) {
+    die('Connection failed: ' . $e->getMessage());
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $action = $_POST['action'];
+
+    if ($action === 'fetch') {
+        $date = $_POST['date'];
+        $stmt = $pdo->prepare('SELECT * FROM events WHERE event_date = ?');
+        $stmt->execute([$date]);
+        echo json_encode($stmt->fetch());
+        exit;
+    }
+
+    if ($action === 'fetchAll') {
+        $month = $_POST['month'];
+        $year = $_POST['year'];
+        $stmt = $pdo->prepare('SELECT * FROM events WHERE MONTH(event_date) = ? AND YEAR(event_date) = ?');
+        $stmt->execute([$month, $year]);
+        echo json_encode($stmt->fetchAll());
+        exit;
+    }
+
+    if ($action === 'save') {
+        $id = $_POST['eventId'];
+        $title = $_POST['title'];
+        $description = $_POST['description'];
+        $date = $_POST['event_date'];
+        $time = $_POST['event_time'];
+
+        if ($id) {
+            $stmt = $pdo->prepare('UPDATE events SET title = ?, description = ?, event_date = ?, event_time = ? WHERE id = ?');
+            $stmt->execute([$title, $description, $date, $time, $id]);
+        } else {
+            $stmt = $pdo->prepare('INSERT INTO events (title, description, event_date, event_time) VALUES (?, ?, ?, ?)');
+            $stmt->execute([$title, $description, $date, $time]);
+        }
+        exit;
+    }
+
+    if ($action === 'delete') {
+        $id = $_POST['id'];
+        $stmt = $pdo->prepare('DELETE FROM events WHERE id = ?');
+        $stmt->execute([$id]);
+        exit;
+    }
+}
+?>
+
+</body>
+</html>
